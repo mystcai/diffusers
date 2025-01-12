@@ -377,86 +377,11 @@ class UNet2DConditionLoadersMixin:
                     if val0 != val1:
                         raise ValueError(f"Configs are incompatible: for {key}, {val0} != {val1}")
 
-            def _hotswap_adapter_from_state_dict(model, state_dict, adapter_name):
-                """
-                Swap out the LoRA weights from the model with the weights from state_dict.
-
-                It is assumed that the existing adapter and the new adapter are compatible.
-
-                Args:
-                    model: nn.Module
-                        The model with the loaded adapter.
-                    state_dict: dict[str, torch.Tensor]
-                        The state dict of the new adapter, which needs to be compatible (targeting same modules etc.).
-                    adapter_name: Optional[str]
-                        The name of the adapter that should be hot-swapped.
-
-                Raises:
-                    RuntimeError
-                        If the old and the new adapter are not compatible, a RuntimeError is raised.
-                """
-                from operator import attrgetter
-
-                #######################
-                # INSERT ADAPTER NAME #
-                #######################
-
-                remapped_state_dict = {}
-                expected_str = adapter_name + "."
-                for key, val in state_dict.items():
-                    if expected_str not in key:
-                        prefix, _, suffix = key.rpartition(".")
-                        key = f"{prefix}.{adapter_name}.{suffix}"
-                    remapped_state_dict[key] = val
-                state_dict = remapped_state_dict
-
-                ####################
-                # CHECK STATE_DICT #
-                ####################
-
-                # Ensure that all the keys of the new adapter correspond exactly to the keys of the old adapter, otherwise
-                # hot-swapping is not possible
-                parameter_prefix = "lora_"  # hard-coded for now
-                is_compiled = hasattr(model, "_orig_mod")
-                # TODO: there is probably a more precise way to identify the adapter keys
-                missing_keys = {k for k in model.state_dict() if (parameter_prefix in k) and (adapter_name in k)}
-                unexpected_keys = set()
-
-                # first: dry run, not swapping anything
-                for key, new_val in state_dict.items():
-                    try:
-                        old_val = attrgetter(key)(model)
-                    except AttributeError:
-                        unexpected_keys.add(key)
-                        continue
-
-                    if is_compiled:
-                        missing_keys.remove("_orig_mod." + key)
-                    else:
-                        missing_keys.remove(key)
-
-                if missing_keys or unexpected_keys:
-                    msg = "Hot swapping the adapter did not succeed."
-                    if missing_keys:
-                        msg += f" Missing keys: {', '.join(sorted(missing_keys))}."
-                    if unexpected_keys:
-                        msg += f" Unexpected keys: {', '.join(sorted(unexpected_keys))}."
-                    raise RuntimeError(msg)
-
-                ###################
-                # ACTUAL SWAPPING #
-                ###################
-
-                for key, new_val in state_dict.items():
-                    # no need to account for potential _orig_mod in key here, as torch handles that
-                    old_val = attrgetter(key)(model)
-                    old_val.data = new_val.data.to(device=old_val.device)
-                    # TODO: wanted to use swap_tensors but this somehow does not work on nn.Parameter
-                    # torch.utils.swap_tensors(old_val.data, new_val.data)
 
             if hotswap:
+                from peft.utils.hotswap import hotswap_adapter_from_state_dict
                 _check_hotswap_configs_compatible(self.peft_config[adapter_name], lora_config)
-                _hotswap_adapter_from_state_dict(self, state_dict, adapter_name)
+                hotswap_adapter_from_state_dict(self, state_dict, adapter_name)
                 # the hotswap function raises if there are incompatible keys, so if we reach this point we can set it to None
                 incompatible_keys = None
             else:
