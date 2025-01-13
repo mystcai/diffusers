@@ -218,6 +218,7 @@ extras["test"] = deps_list(
     "k-diffusion",
     "librosa",
     "parameterized",
+    "peft",
     "pytest",
     "pytest-timeout",
     "pytest-xdist",
