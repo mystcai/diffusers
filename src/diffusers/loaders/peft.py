@@ -344,7 +344,7 @@ class PeftAdapterMixin:
                     from peft.utils.hotswap import hotswap_adapter_from_state_dict
                     peft_config = getattr(self, "peft_config", {})[adapter_name]
                     _check_hotswap_configs_compatible(peft_config, lora_config)
-                    hotswap_adapter_from_state_dict(self, state_dict, adapter_name, **peft_kwargs)
+                    hotswap_adapter_from_state_dict(self, state_dict, adapter_name)
                 else:
                     inject_adapter_in_model(lora_config, self, adapter_name=adapter_name, **peft_kwargs)
                     incompatible_keys = set_peft_model_state_dict(self, state_dict, adapter_name, **peft_kwargs)
