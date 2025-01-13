@@ -680,6 +680,7 @@ class LoraBaseMixin:
 
         for component in self._lora_loadable_modules:
             model = getattr(self, component, None)
+            print(f"get_list_adapters: component class: {model.__class__}")
             if (
                 model is not None
                 and issubclass(model.__class__, (ModelMixin, PreTrainedModel))
