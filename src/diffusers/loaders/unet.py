@@ -381,7 +381,7 @@ class UNet2DConditionLoadersMixin:
             if hotswap:
                 from peft.utils.hotswap import hotswap_adapter_from_state_dict
                 _check_hotswap_configs_compatible(self.peft_config[adapter_name], lora_config)
-                hotswap_adapter_from_state_dict(self, state_dict, adapter_name)
+                hotswap_adapter_from_state_dict(self, state_dict, adapter_name, **peft_kwargs)
                 # the hotswap function raises if there are incompatible keys, so if we reach this point we can set it to None
                 incompatible_keys = None
             else:
