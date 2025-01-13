@@ -1797,7 +1797,7 @@ class FluxLoraLoaderMixin(LoraBaseMixin):
             return state_dict
 
     def load_lora_weights(
-        self, pretrained_model_name_or_path_or_dict: Union[str, Dict[str, torch.Tensor]], adapter_name=None, **kwargs
+        self, pretrained_model_name_or_path_or_dict: Union[str, Dict[str, torch.Tensor]], adapter_name=None, hotswap=False, **kwargs
     ):
         """
         Load LoRA weights specified in `pretrained_model_name_or_path_or_dict` into `self.transformer` and
@@ -1873,6 +1873,9 @@ class FluxLoraLoaderMixin(LoraBaseMixin):
             )
 
         if len(transformer_lora_state_dict) > 0:
+            if hotswap is True:
+                print("loading lora into transformer via hotswap...")
+
             self.load_lora_into_transformer(
                 transformer_lora_state_dict,
                 network_alphas=network_alphas,
@@ -1880,6 +1883,7 @@ class FluxLoraLoaderMixin(LoraBaseMixin):
                 adapter_name=adapter_name,
                 _pipeline=self,
                 low_cpu_mem_usage=low_cpu_mem_usage,
+                hotswap=hotswap,
             )
 
         if len(transformer_norm_state_dict) > 0:
@@ -1904,7 +1908,7 @@ class FluxLoraLoaderMixin(LoraBaseMixin):
 
     @classmethod
     def load_lora_into_transformer(
-        cls, state_dict, network_alphas, transformer, adapter_name=None, _pipeline=None, low_cpu_mem_usage=False
+        cls, state_dict, network_alphas, transformer, adapter_name=None, _pipeline=None, low_cpu_mem_usage=False, hotswap=False,
     ):
         """
         This will load the LoRA layers specified in `state_dict` into `transformer`.
@@ -1936,13 +1940,14 @@ class FluxLoraLoaderMixin(LoraBaseMixin):
         keys = list(state_dict.keys())
         transformer_present = any(key.startswith(cls.transformer_name) for key in keys)
         if transformer_present:
-            logger.info(f"Loading {cls.transformer_name}.")
+            logger.info(f"Loading {cls.transformer_name}, hotswap {hotswap}.")
             transformer.load_lora_adapter(
                 state_dict,
                 network_alphas=network_alphas,
                 adapter_name=adapter_name,
                 _pipeline=_pipeline,
                 low_cpu_mem_usage=low_cpu_mem_usage,
+                hotswap=hotswap,
             )
 
     @classmethod

@@ -161,7 +161,7 @@ class PeftAdapterMixin:
 
         return (is_model_cpu_offload, is_sequential_cpu_offload)
 
-    def load_lora_adapter(self, pretrained_model_name_or_path_or_dict, prefix="transformer", **kwargs):
+    def load_lora_adapter(self, pretrained_model_name_or_path_or_dict, prefix="transformer", hotswap=False, **kwargs):
         r"""
         Loads a LoRA adapter into the underlying model.
 
@@ -258,10 +258,12 @@ class PeftAdapterMixin:
                 state_dict = {k.replace(f"{prefix}.", ""): v for k, v in state_dict.items() if k in model_keys}
 
         if len(state_dict) > 0:
-            if adapter_name in getattr(self, "peft_config", {}):
+            if adapter_name in getattr(self, "peft_config", {}) and not hotswap:
                 raise ValueError(
                     f"Adapter name {adapter_name} already in use in the model - please select a new adapter name."
                 )
+            elif adapter_name not in getattr(self, "peft_config", {}) and hotswap:
+                raise ValueError(f"Trying to hotswap LoRA adapter '{adapter_name}' but there is no existing adapter by that name.")
 
             # check with first key if is not in peft format
             first_key = next(iter(state_dict.keys()))
@@ -319,11 +321,33 @@ class PeftAdapterMixin:
             if is_peft_version(">=", "0.13.1"):
                 peft_kwargs["low_cpu_mem_usage"] = low_cpu_mem_usage
 
+            def _check_hotswap_configs_compatible(config0, config1):
+                # To hot-swap two adapters, their configs must be compatible. Otherwise, the results could be false. E.g. if they
+                # use different alpha values, after hot-swapping, the alphas from the first adapter would still be used with the
+                # weights from the 2nd adapter, which would result in incorrect behavior. There is probably a way to swap these
+                # values as well, but that's not implemented yet, and it would trigger a re-compilation if the model is compiled.
+
+                # TODO: This is a very rough check at the moment and there are probably better ways than to error out
+                config_keys_to_check = ["lora_alpha", "use_rslora", "lora_dropout", "alpha_pattern", "use_dora"]
+                config0 = config0.to_dict()
+                config1 = config1.to_dict()
+                for key in config_keys_to_check:
+                    val0 = config0[key]
+                    val1 = config1[key]
+                    if val0 != val1:
+                        raise ValueError(f"Configs are incompatible: for {key}, {val0} != {val1}")
+
             # To handle scenarios where we cannot successfully set state dict. If it's unsucessful,
             # we should also delete the `peft_config` associated to the `adapter_name`.
             try:
-                inject_adapter_in_model(lora_config, self, adapter_name=adapter_name, **peft_kwargs)
-                incompatible_keys = set_peft_model_state_dict(self, state_dict, adapter_name, **peft_kwargs)
+                if hotswap:
+                    from peft.utils.hotswap import hotswap_adapter_from_state_dict
+                    peft_config = getattr(self, "peft_config", {})[adapter_name]
+                    _check_hotswap_configs_compatible(peft_config, lora_config)
+                    hotswap_adapter_from_state_dict(self, state_dict, adapter_name, **peft_kwargs)
+                else:
+                    inject_adapter_in_model(lora_config, self, adapter_name=adapter_name, **peft_kwargs)
+                    incompatible_keys = set_peft_model_state_dict(self, state_dict, adapter_name, **peft_kwargs)
             except RuntimeError as e:
                 for module in self.modules():
                     if isinstance(module, BaseTunerLayer):
