@@ -566,6 +566,7 @@ class LoraBaseMixin:
         _component_adapter_weights = {}
         for component in self._lora_loadable_modules:
             model = getattr(self, component)
+            _component_adapter_weights.setdefault(component, [])
 
             for adapter_name, weights in zip(adapter_names, adapter_weights):
                 if isinstance(weights, dict):
@@ -588,7 +589,6 @@ class LoraBaseMixin:
                 else:
                     component_adapter_weights = weights
 
-                _component_adapter_weights.setdefault(component, [])
                 _component_adapter_weights[component].append(component_adapter_weights)
 
             if is_optimized_model_subclass(model, ModelMixin):
